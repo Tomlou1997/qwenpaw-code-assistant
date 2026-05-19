@@ -2,7 +2,7 @@
   "name": "qwenpaw-code-assistant",
   "displayName": "QwenPaw Code Assistant",
   "description": "将 QwenPaw AI 助手集成到 VSCode 对话面板，提供代码解释、优化、问题排查等功能",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "icon": "OIP.png",
   "publisher": "tomlou",
   "author": "tomlou",
@@ -20,6 +20,13 @@
     "code review"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tomlou/qwenpaw-code-assistant"
+  },
+  "bugs": {
+    "url": "https://github.com/tomlou/qwenpaw-code-assistant/issues"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],

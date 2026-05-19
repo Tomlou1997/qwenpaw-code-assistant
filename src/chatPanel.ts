@@ -73,7 +73,7 @@ export class QwenPawChatPanel {
   }
 
   /**
-   * 处理用户消息
+   * 处理用户消息（支持流式反馈）
    */
   public async _handleUserMessage(text: string) {
     this._conversationHistory.push({ role: 'user', content: text });
@@ -86,23 +86,36 @@ export class QwenPawChatPanel {
     
     this._postMessage('setLoading', true);
 
+    // ★ 先发一个空的 assistant 消息占位，后面流式追加
+    this._postMessage('addMessage', {
+      role: 'assistant',
+      content: '',
+      timestamp: new Date().toLocaleTimeString(),
+      isStreaming: true
+    });
+
     try {
       const contextPrompt = this._buildContextPrompt(text);
-      const response = await this._callQwenPaw(contextPrompt);
+      let fullResponse = '';
       
-      this._conversationHistory.push({ role: 'assistant', content: response });
+      await this._callQwenPaw(contextPrompt, (deltaText: string) => {
+        fullResponse += deltaText;
+        // 每次收到一段增量文本就更新 webview 中的最后一条消息
+        this._postMessage('streamUpdate', {
+          content: fullResponse
+        });
+      });
       
-      this._postMessage('addMessage', {
-        role: 'assistant',
-        content: response,
-        timestamp: new Date().toLocaleTimeString()
+      this._conversationHistory.push({ role: 'assistant', content: fullResponse });
+      
+      // 流式结束，标记完成
+      this._postMessage('streamEnd', {
+        content: fullResponse
       });
       
     } catch (error: any) {
-      this._postMessage('addMessage', {
-        role: 'assistant',
-        content: '**错误**: ' + error.message,
-        timestamp: new Date().toLocaleTimeString()
+      this._postMessage('streamEnd', {
+        content: '**错误**: ' + error.message
       });
     } finally {
       this._postMessage('setLoading', false);
@@ -110,17 +123,24 @@ export class QwenPawChatPanel {
   }
 
   /**
-   * 构建提示
+   * 构建提示（含工作区路径）
    */
   private _buildContextPrompt(userMessage: string): string {
     const editor = vscode.window.activeTextEditor;
     let context = '';
     
+    // ★ 获取 VS Code 当前打开的文件夹路径（用户真正的工作区）
+    const workspaceFolders = vscode.workspace.workspaceFolders;
+    const workspacePath = (workspaceFolders && workspaceFolders.length > 0)
+      ? workspaceFolders[0].uri.fsPath
+      : (vscode.workspace.rootPath || '未知');
+    context = '当前工作区路径: ' + workspacePath + '\n';
+    
     if (editor) {
       const document = editor.document;
       const selection = editor.selection;
       
-      context = '当前文件: ' + document.fileName + '\n';
+      context += '当前文件: ' + document.fileName + '\n';
       context += '语言: ' + document.languageId + '\n';
       
       if (!selection.isEmpty) {
@@ -162,13 +182,18 @@ export class QwenPawChatPanel {
     prompt += '用户: ' + userMessage + '\n\n';
     prompt += '请用中文回答，如果涉及代码，请用代码块标注。';
     
+    prompt += '\n\n重要说明：\n';
+    prompt += '1. 当前工作区路径是 ' + workspacePath + '，当用户说"当前路径"、提到文件时，请优先基于此路径处理。\n';
+    prompt += '2. 如果你需要读取文件或执行操作，请在此路径下进行。\n';
+    
     return prompt;
   }
 
   /**
-   * 调用 QwenPaw API - 带 session 记忆（直接调 /api/agent/process SSE 接口）
+   * 调用 QwenPaw API - 带 session 记忆 + 流式回调
+   * @param onDelta 每收到一段文本时回调，用于流式显示到 webview
    */
-  private async _callQwenPaw(prompt: string): Promise<string> {
+  private async _callQwenPaw(prompt: string, onDelta?: (text: string) => void): Promise<string> {
     return new Promise((resolve, reject) => {
       const http = require('http');
       
@@ -212,6 +237,7 @@ export class QwenPawChatPanel {
         let responseText = '';
         let buffer = '';
         let lastCompleteText = '';  // 兜底：记录最后一条 completed 事件的完整文本
+        let lastDeltaTime = Date.now();
         
         res.on('data', (chunk: Buffer) => {
           buffer += chunk.toString('utf-8');
@@ -228,6 +254,53 @@ export class QwenPawChatPanel {
                 // 收集所有 delta 文本事件
                 if (data.type === 'text' && data.delta === true && data.text) {
                   responseText += data.text;
+                  // ★ 流式反馈：每次收到 delta 立即推给 webview
+                  if (onDelta && data.text) {
+                    onDelta(data.text);
+                    lastDeltaTime = Date.now();
+                  }
+                }
+                // ★ 收集工具调用事件（QwenPaw SSE 格式）
+                // 调用: type=data, data.name=工具名, data.arguments='{"key":"val"}'
+                // 结果: type=data, data.name=工具名, data.output='[{...}]'
+                if (data.type === 'data' && data.data && data.data.name) {
+                  const toolName = data.data.name;
+                  const toolArgs = data.data.arguments;
+                  const toolOutput = data.data.output;
+                  
+                  // 工具调用 — arguments 是合法 JSON 对象（不为空且不是 {}）
+                  if (toolArgs && toolArgs !== '""' && toolArgs !== '{}' && toolArgs !== '') {
+                    try {
+                      const parsed = JSON.parse(toolArgs);
+                      const keys = Object.keys(parsed);
+                      const argsStr = keys.filter(k => k !== 'content' && k !== 'code').join(', ');
+                      const toolHint = `\n> 🛠️ 正在调用: **${toolName}**${argsStr ? ' (' + argsStr + ')' : ''}\n`;
+                      responseText += toolHint;
+                      if (onDelta) {
+                        onDelta(toolHint);
+                        lastDeltaTime = Date.now();
+                      }
+                    } catch { /* ignore parse failures */ }
+                  }
+                  
+                  // 工具结果 — output 存在且不为空
+                  if (toolOutput && toolOutput !== '""' && toolOutput !== '[]' && toolOutput !== '') {
+                    try {
+                      const parsed = JSON.parse(toolOutput);
+                      let summary = '';
+                      if (Array.isArray(parsed) && parsed[0] && parsed[0].text) {
+                        summary = parsed[0].text.substring(0, 120);
+                      } else if (typeof parsed === 'string') {
+                        summary = parsed.substring(0, 120);
+                      }
+                      const resultHint = `\n> ✅ 工具 **${toolName}** 完成${summary ? ': ' + summary.replace(/\n/g, ' ') : ''}\n`;
+                      responseText += resultHint;
+                      if (onDelta) {
+                        onDelta(resultHint);
+                        lastDeltaTime = Date.now();
+                      }
+                    } catch { /* ignore parse failures */ }
+                  }
                 }
                 // 兜底：status=completed 时 text 字段包含完整内容
                 if (data.type === 'text' && data.status === 'completed' && data.text) {
@@ -238,11 +311,13 @@ export class QwenPawChatPanel {
                   for (const item of data.output) {
                     if (item.type === 'text' && item.text) {
                       responseText += item.text;
+                      if (onDelta && item.text) {
+                        onDelta(item.text);
+                        lastDeltaTime = Date.now();
+                      }
                     }
                   }
                 }
-                // 日志调试: 记录收到的数据类型
-                console.log(`[QwenPaw Chat] SSE event: type=${data.type}, status=${data.status}, hasText=${!!data.text}, hasOutput=${!!data.output}`);
               } catch { /* ignore */ }
             }
           }
@@ -255,6 +330,9 @@ export class QwenPawChatPanel {
               const data = JSON.parse(buffer.slice(6));
               if (data.type === 'text' && data.delta === true && data.text) {
                 responseText += data.text;
+                if (onDelta && data.text) {
+                  onDelta(data.text);
+                }
               }
               if (data.type === 'text' && data.status === 'completed' && data.text) {
                 lastCompleteText = data.text;
@@ -480,6 +558,7 @@ export class QwenPawChatPanel {
       'const sendBtn = document.getElementById("sendBtn");',
       'const emptyState = document.getElementById("emptyState");',
       'let isLoading = false;',
+      'let streamMessageDiv = null; // 当前流式消息的 DOM 元素',
       'inputArea.addEventListener("input", () => {',
       '  inputArea.style.height = "auto";',
       '  inputArea.style.height = Math.min(inputArea.scrollHeight, 120) + "px";',
@@ -503,21 +582,44 @@ export class QwenPawChatPanel {
       '}',
       'function clearConversation() {',
       '  if (confirm("确定清空所有对话？")) {',
+      '    streamMessageDiv = null;',
       '    vscode.postMessage({ command: "clearConversation" });',
       '  }',
+      '}',
+      '// ★ 渲染 markdown 风格的内容（代码块、换行等）',
+      'function renderContent(content) {',
+      '  let html = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");',
+      '  html = html.replace(/```(\\w*)\\n?([\\s\\S]*?)\\n?```/g, function(m, lang, code) {',
+      '    return "<pre><code>" + code + "</code></pre>";',
+      '  });',
+      '  html = html.replace(/\\n/g, "<br>");',
+      '  return html;',
       '}',
       'function addMessage(message) {',
       '  emptyState.style.display = "none";',
       '  const msgDiv = document.createElement("div");',
       '  msgDiv.className = "message " + message.role;',
-      '  let content = message.content;',
-      '  content = content.replace(/</g, "&lt;").replace(/>/g, "&gt;");',
-      '  content = content.replace(/```(\\w*)\\n?([\\s\\S]*?)\\n?```/g, function(m, lang, code) {',
-      '    return "<pre><code>" + code + "</code></pre>";',
-      '  });',
-      '  content = content.replace(/\\n/g, "<br>");',
-      '  msgDiv.innerHTML = content + \'<div class="timestamp">\' + message.timestamp + \'</div>\';',
+      '  msgDiv.innerHTML = renderContent(message.content) + \'<div class="timestamp">\' + message.timestamp + \'</div>\';',
       '  chatContainer.appendChild(msgDiv);',
+      '  chatContainer.scrollTop = chatContainer.scrollHeight;',
+      '  return msgDiv;',
+      '}',
+      '// ★ 流式更新：更新最后一条消息的内容',
+      'function streamUpdate(content) {',
+      '  if (!streamMessageDiv) return;',
+      '  // 更新内容（保留 timestamp 的 DOM 结构）',
+      '  const timestampEl = streamMessageDiv.querySelector(".timestamp");',
+      '  streamMessageDiv.innerHTML = renderContent(content);',
+      '  if (timestampEl) streamMessageDiv.appendChild(timestampEl);',
+      '  chatContainer.scrollTop = chatContainer.scrollHeight;',
+      '}',
+      '// ★ 流式结束：标记完成',
+      'function streamEnd(content) {',
+      '  if (!streamMessageDiv) return;',
+      '  const timestampEl = streamMessageDiv.querySelector(".timestamp");',
+      '  streamMessageDiv.innerHTML = renderContent(content);',
+      '  if (timestampEl) streamMessageDiv.appendChild(timestampEl);',
+      '  streamMessageDiv = null;',
       '  chatContainer.scrollTop = chatContainer.scrollHeight;',
       '}',
       'function setLoading(loading) {',
@@ -538,10 +640,26 @@ export class QwenPawChatPanel {
       '}',
       'window.addEventListener("message", event => {',
       '  const message = event.data;',
-      '  if (message.command === "addMessage") addMessage(message);',
+      '  if (message.command === "addMessage") {',
+      '    if (message.isStreaming) {',
+      '      // ★ 流式消息占位：创建空的消息容器',
+      '      emptyState.style.display = "none";',
+      '      const msgDiv = document.createElement("div");',
+      '      msgDiv.className = "message assistant";',
+      '      msgDiv.innerHTML = "<em>正在输入...</em>" + \'<div class="timestamp">\' + message.timestamp + \'</div>\';',
+      '      chatContainer.appendChild(msgDiv);',
+      '      streamMessageDiv = msgDiv;',
+      '      chatContainer.scrollTop = chatContainer.scrollHeight;',
+      '    } else {',
+      '      addMessage(message);',
+      '    }',
+      '  }',
+      '  if (message.command === "streamUpdate") streamUpdate(message.content);',
+      '  if (message.command === "streamEnd") streamEnd(message.content);',
       '  if (message.command === "setLoading") setLoading(message.loading);',
       '  if (message.command === "updateChat") {',
       '    chatContainer.innerHTML = "";',
+      '    streamMessageDiv = null;',
       '    if (message.messages && message.messages.length > 0) {',
       '      emptyState.style.display = "none";',
       '      message.messages.forEach(msg => addMessage(msg));',

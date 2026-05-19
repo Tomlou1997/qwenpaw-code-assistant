@@ -1,17 +1,17 @@
-# QwenPaw Helper
+# QwenPaw Code Assistant
 
-**将 QwenPaw AI 助手集成到 VSCode 的对话面板**
+**将 QwenPaw AI 助手集成到 VS Code 对话面板** — 支持代码解释、优化、重构、问题排查
 
 作者：tomlou
 
 ## ✨ 功能
 
-### 💬 对话面板
-右侧打开聊天窗口，与 QwenPaw AI 对话，支持对话记忆。
+### 💬 实时对话面板
+右侧打开聊天窗口，与 QwenPaw AI 实时对话，支持流式输出和对话记忆。
 
 - 💡 **解释代码** — 选中代码，一键解释功能和逻辑
 - ⚡ **优化代码** — 分析代码问题并提供优化方案
-- 🔍 **找问题** — 审查代码，找出潜在问题
+- 🔍 **代码审查** — 审查代码，找出潜在问题
 - 📋 **发送选中代码** — 将编辑器选中的代码发送到对话框
 
 ### 🖱️ 右键菜单
@@ -20,20 +20,29 @@
 - **Ask QwenPaw about selection** — 将选中代码发送给 QwenPaw 并自由提问
 - **Refactor selected code** — 让 QwenPaw 重构选中的代码
 
+### 🆕 v1.0.1 新增特性
+
+| 特性 | 说明 |
+|------|------|
+| ⚡ **流式输出** | 回答内容逐段显示，无需等待全部完成 |
+| 📍 **自动感知工作区** | 自动识别 VS Code 当前打开的文件夹路径 |
+| 🔧 **工具调用可视化** | 实时显示 AI 正在调用的工具（读文件、执行命令等） |
+| 🧠 **对话记忆** | 保留对话上下文，支持连续追问 |
+
 ## 📦 安装要求
 
-- **VSCode 1.75+**
+- **VS Code 1.75+**
 - **QwenPaw 1.0.2+**（运行于本地）
 
 ## 🚀 快速开始
 
-### 1. 确保 QwenPaw 服务在运行（CLI 命令为 `copaw`）
+### 1. 确保 QwenPaw 服务在运行
 ```bash
 copaw app
 ```
 
-### 2. 配置 API 地址
-VSCode 设置 → 搜索 `qwenpaw.endpoint` → 默认 `http://127.0.0.1:8088`
+### 2. （可选）配置 API 地址
+VS Code 设置 → 搜索 `qwenpaw.endpoint` → 默认 `http://127.0.0.1:8088`
 
 ### 3. 使用
 点击左侧活动栏 QwenPaw 图标，或右键菜单中选择功能。
@@ -44,7 +53,7 @@ VSCode 设置 → 搜索 `qwenpaw.endpoint` → 默认 `http://127.0.0.1:8088`
 |--------|--------|------|
 | `qwenpaw.endpoint` | `http://127.0.0.1:8088` | QwenPaw 服务器地址 |
 | `qwenpaw.agentId` | `default` | 默认 Agent ID |
-| `qwenpaw.timeout` | `300000` | 请求超时（毫秒） |
+| `qwenpaw.timeout` | `300000` | 请求超时时间（毫秒） |
 
 ## 📄 许可证
 

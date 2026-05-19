@@ -26,7 +26,11 @@ export class QwenPawIntegration {
     try {
       this.log(`调用 QwenPaw: ${instruction.substring(0, 100)}...`);
       
-      const workspacePath = vscode.workspace.rootPath || process.cwd();
+      // 优先取 VS Code 打开的文件夹根路径
+      const workspaceFolders = vscode.workspace.workspaceFolders;
+      const workspacePath = (workspaceFolders && workspaceFolders.length > 0)
+        ? workspaceFolders[0].uri.fsPath
+        : (vscode.workspace.rootPath || process.cwd());
       const fs = require('fs');
       const os = require('os');
       const path = require('path');
