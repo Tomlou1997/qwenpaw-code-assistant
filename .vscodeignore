@@ -1,0 +1,16 @@
+.vscode/**
+.vscode-test/**
+src/**
+node_modules/**
+.gitignore
+tsconfig.json
+**/*.ts
+**/*.map
+**/tsconfig.json
+**/node_modules/**
+**/src/**
+!out/**
+!out/**/*
+!out/extension.js
+!out/chatPanel.js
+.gitignore

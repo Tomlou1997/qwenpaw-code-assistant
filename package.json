@@ -1,0 +1,135 @@
+{
+  "name": "qwenpaw-code-assistant",
+  "displayName": "QwenPaw Code Assistant",
+  "description": "将 QwenPaw AI 助手集成到 VSCode 对话面板，提供代码解释、优化、问题排查等功能",
+  "version": "1.0.0",
+  "icon": "OIP.png",
+  "publisher": "tomlou",
+  "author": "tomlou",
+  "engines": {
+    "vscode": "^1.75.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "qwenpaw",
+    "ai",
+    "code analysis",
+    "code review"
+  ],
+  "license": "MIT",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "qwenpaw.openChat",
+        "title": "Open QwenPaw Chat Panel",
+        "icon": "$(comment-discussion)"
+      },
+      {
+        "command": "qwenpaw.askSelection",
+        "title": "Ask QwenPaw about selection"
+      },
+      {
+        "command": "qwenpaw.explainError",
+        "title": "Explain error"
+      },
+      {
+        "command": "qwenpaw.refactorCode",
+        "title": "Refactor selected code"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "qwenpaw-sidebar",
+          "title": "QwenPaw",
+          "icon": "$(comment-discussion)"
+        }
+      ]
+    },
+    "views": {
+      "qwenpaw-sidebar": [
+        {
+          "type": "webview",
+          "id": "qwenpaw.chatView",
+          "name": "QwenPaw"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "qwenpaw.askSelection",
+          "when": "editorHasSelection",
+          "group": "qwenpaw@1"
+        },
+        {
+          "command": "qwenpaw.refactorCode",
+          "when": "editorHasSelection",
+          "group": "qwenpaw@2"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "qwenpaw.openChat",
+          "when": "true"
+        },
+        {
+          "command": "qwenpaw.askSelection",
+          "when": "editorHasSelection"
+        },
+        {
+          "command": "qwenpaw.explainError",
+          "when": "true"
+        },
+        {
+          "command": "qwenpaw.refactorCode",
+          "when": "editorHasSelection"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "qwenpaw.openChat",
+          "when": "view == qwenpaw.chatView",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "QwenPaw",
+      "properties": {
+        "qwenpaw.endpoint": {
+          "type": "string",
+          "default": "http://127.0.0.1:8088",
+          "description": "QwenPaw 服务器地址"
+        },
+        "qwenpaw.agentId": {
+          "type": "string",
+          "default": "default",
+          "description": "默认 Agent ID"
+        },
+        "qwenpaw.timeout": {
+          "type": "number",
+          "default": 300000,
+          "description": "请求超时时间（毫秒）"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.75.0",
+    "typescript": "^5.0.0"
+  },
+  "type": "commonjs"
+}
