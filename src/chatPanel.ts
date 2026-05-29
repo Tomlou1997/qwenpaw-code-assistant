@@ -90,7 +90,10 @@ export class QwenPawChatPanel {
       this._disposables
     );
     
-    this._panel.onDidDispose(() => this._panel.dispose(), null, this._disposables);
+    this._panel.onDidDispose(() => {
+      QwenPawChatPanel.currentPanel = undefined;
+      this._panel.dispose();
+    }, null, this._disposables);
   }
 
   /**
@@ -100,8 +103,14 @@ export class QwenPawChatPanel {
     const column = vscode.ViewColumn.Beside;
 
     if (QwenPawChatPanel.currentPanel) {
-      QwenPawChatPanel.currentPanel._panel.reveal(column);
-      return;
+      // 检查面板是否已经销毁
+      try {
+        QwenPawChatPanel.currentPanel._panel.reveal(column);
+        return;
+      } catch {
+        // 面板已销毁，重新创建
+        QwenPawChatPanel.currentPanel = undefined;
+      }
     }
 
     const panel = vscode.window.createWebviewPanel(
