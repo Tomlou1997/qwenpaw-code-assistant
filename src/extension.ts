@@ -152,11 +152,6 @@ export class QwenPawIntegration {
     return await this.callQwenPawTask(prompt);
   }
   
-  async explainError(errorMessage: string): Promise<string> {
-    const prompt = `解释这个错误信息并提供解决方案：\n${errorMessage}`;
-    return await this.callQwenPawTask(prompt);
-  }
-  
   private log(message: string): void {
     const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
     this.outputChannel.appendLine(`[${timestamp}] ${message}`);
@@ -219,35 +214,6 @@ export function activate(context: vscode.ExtensionContext) {
     }
   );
   
-  const explainErrorCommand = vscode.commands.registerCommand(
-    'qwenpaw.explainError',
-    async () => {
-      const errorMessage = await vscode.window.showInputBox({
-        prompt: '输入错误信息',
-        placeHolder: '例如：SyntaxError: invalid syntax at line 10',
-        value: await vscode.env.clipboard.readText()
-      });
-      
-      if (!errorMessage) { return; }
-      
-      vscode.window.withProgress(
-        {
-          location: vscode.ProgressLocation.Notification,
-          title: 'QwenPaw 正在分析错误...',
-          cancellable: false
-        },
-        async (progress) => {
-          try {
-            const explanation = await qwenpaw.explainError(errorMessage);
-            vscode.window.showInformationMessage(explanation.substring(0, 200), { modal: true });
-          } catch (error: any) {
-            vscode.window.showErrorMessage(`❌ 错误分析失败: ${error.message}`);
-          }
-        }
-      );
-    }
-  );
-  
   const refactorCodeCommand = vscode.commands.registerCommand(
     'qwenpaw.refactorCode',
     async () => {
@@ -303,7 +269,6 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     showOutputCommand,
     askSelectionCommand,
-    explainErrorCommand,
     refactorCodeCommand,
     openChatCommand
   );
