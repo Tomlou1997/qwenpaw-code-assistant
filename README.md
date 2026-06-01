@@ -1,6 +1,6 @@
 # QwenPaw Code Assistant
 
-**将 QwenPaw AI 助手集成到 VS Code 对话面板** — 支持代码解释、优化、重构、问题排查
+**将 QwenPaw AI 助手集成到 VS Code 对话面板** — 支持代码解释、优化、重构、问题排查，实时流式输出，工具调用可视化
 
 作者：tomlou
 
@@ -20,7 +20,7 @@
 - **Ask QwenPaw about selection** — 将选中代码发送给 QwenPaw 并自由提问
 - **Refactor selected code** — 让 QwenPaw 重构选中的代码
 
-### 🆕 v1.0.1 新增特性
+### ⚡ 特色功能
 
 | 特性 | 说明 |
 |------|------|
@@ -38,7 +38,7 @@
 
 ### 1. 确保 QwenPaw 服务在运行
 ```bash
-copaw app
+qwenpaw app
 ```
 
 ### 2. （可选）配置 API 地址
